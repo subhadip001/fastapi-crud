@@ -1,7 +1,9 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
+from time import time , sleep
+from fastapi.middleware.cors import CORSMiddleware
 
 class BaseTodo(BaseModel):
     task: str
@@ -15,15 +17,23 @@ class ReturnTodo(BaseTodo):
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 todos = []
 
 
 @app.middleware("http")
 async def add_process_time_header(request, call_next):
-    print("before")
+    start_time = time()
     response = await call_next(request)
-    print("after")
+    process_time = time() - start_time
+    print(f"Time taken to process request: {process_time}")
     return response
 
 
@@ -32,10 +42,16 @@ def read_root():
     return {"message": "Hello World"}
 
 
+async def send_email(background_tasks: BackgroundTasks):
+    print("Sending email...")
+    sleep(10)
+    print("Email sent.")
+
 @app.post("/todos/" , response_model=ReturnTodo)
-async def create_todos(todo: TodoItem):
+async def create_todos(todo: TodoItem , background_task: BackgroundTasks):
     todo.id = len(todos) + 1
     todos.append(todo)
+    background_task.add_task(send_email)
     return todo
 
 
@@ -73,6 +89,6 @@ async def delete_todo_by_id(todo_id: int):
     raise HTTPException(status_code=404, detail="Todo not found")
 
 
-# Path: main.py
+
 if __name__ == "__main__":
     uvicorn.run("__main__:app", host="127.0.0.1", port=8000 , reload=True)
